@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NetScanner — Home Network Map</title>
+  <style>
+    /* ─── Design tokens ─────────────────────────────────────────── */
+    :root {
+      --bg:        #0A0E17;
+      --surface:   #111827;
+      --surface2:  #1A2235;
+      --border:    #1E2D45;
+      --accent:    #00E5A0;
+      --accent2:   #0077FF;
+      --warn:      #FF5C5C;
+      --warn-dim:  rgba(255,92,92,.12);
+      --text:      #E2EAF4;
+      --muted:     #5A7090;
+      --mono:      'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+      --sans:      'Inter', system-ui, -apple-system, sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── Grid noise background ─────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: .25;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ─── Layout ─────────────────────────────────────────────────── */
+    .wrap { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+
+    header {
+      padding: 20px 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .logo-text h1 { font-size: 18px; font-weight: 700; letter-spacing: -.3px; }
+    .logo-text p  { font-size: 12px; color: var(--muted); }
+    .header-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+
+    /* ─── Buttons ─────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-size: 13px; font-weight: 600;
+      border: none; cursor: pointer;
+      transition: opacity .15s, transform .1s;
+      font-family: var(--sans);
+    }
+    .btn:hover { opacity: .88; }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-ghost   { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ─── Stats row ──────────────────────────────────────────────── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding: 20px 0;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+    }
+    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px; }
+    .stat-value { font-size: 28px; font-weight: 700; font-family: var(--mono); line-height: 1; }
+    .stat-value.accent { color: var(--accent); }
+    .stat-value.warn   { color: var(--warn); }
+    .stat-value.blue   { color: var(--accent2); }
+
+    /* ─── Progress bar ───────────────────────────────────────────── */
+    #scan-progress-wrap {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+    }
+    #scan-progress-wrap.active { display: block; }
+    .progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .progress-title  { font-size: 13px; font-weight: 600; color: var(--accent); }
+    .progress-pct    { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+    .progress-bar-bg {
+      height: 4px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 4px;
+      transition: width .3s ease;
+      box-shadow: 0 0 10px var(--accent);
+    }
+    .scan-log {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      max-height: 80px;
+      overflow-y: auto;
+      line-height: 1.7;
+    }
+    .scan-log .log-line { display: block; }
+
+    /* ─── Two-column layout ──────────────────────────────────────── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 16px;
+      padding-bottom: 40px;
+    }
+
+    /* ─── Device list ────────────────────────────────────────────── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .panel-title { font-size: 13px; font-weight: 600; }
+    .badge {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+    .badge-accent { background: rgba(0,229,160,.12); color: var(--accent); }
+    .badge-warn   { background: var(--warn-dim); color: var(--warn); }
+    .badge-muted  { background: var(--surface2); color: var(--muted); }
+
+    /* Filter tabs */
+    .filter-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    .tab {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-family: var(--sans);
+      transition: background .15s, color .15s;
+      white-space: nowrap;
+      background: transparent;
+      color: var(--muted);
+    }
+    .tab:hover { background: var(--surface2); color: var(--text); }
+    .tab.active { background: var(--surface2); color: var(--accent); }
+
+    /* Search */
+    .search-bar {
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .search-input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px 8px 36px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: var(--sans);
+      outline: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='7' cy='7' r='5' stroke='%235A7090' stroke-width='1.5'/%3E%3Cpath d='m11 11 2.5 2.5' stroke='%235A7090' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: 12px center;
+    }
+    .search-input::placeholder { color: var(--muted); }
+    .search-input:focus { border-color: var(--accent); }
+
+    /* Device rows */
+    .device-list { list-style: none; }
+    .device-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background .12s;
+      position: relative;
+    }
+    .device-row:last-child { border-bottom: none; }
+    .device-row:hover { background: var(--surface2); }
+    .device-row.flagged { border-left: 3px solid var(--warn); padding-left: 17px; }
+    .device-row.selected { background: rgba(0,229,160,.05); }
+
+    /* Device icon */
+    .dev-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .dev-icon.router    { background: rgba(0,119,255,.15); }
+    .dev-icon.computer  { background: rgba(0,229,160,.12); }
+    .dev-icon.smartphone{ background: rgba(170,102,255,.15); }
+    .dev-icon.tablet    { background: rgba(170,102,255,.15); }
+    .dev-icon.iot       { background: rgba(255,165,0,.12); }
+    .dev-icon.server    { background: rgba(0,229,160,.08); }
+    .dev-icon.camera    { background: rgba(255,92,92,.12); }
+    .dev-icon.single-board { background: rgba(255,92,92,.10); }
+    .dev-icon.unknown   { background: var(--surface2); }
+
+    .dev-info { flex: 1; min-width: 0; }
+    .dev-name {
+      font-size: 13px; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .dev-sub {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .dev-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+    .flag-icon { font-size: 14px; }
+
+    /* Empty state */
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--muted);
+    }
+    .empty-state .em-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state p { font-size: 13px; }
+
+    /* ─── Right sidebar ───────────────────────────────────────────── */
+    .sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+    /* Detail panel */
+    #device-detail {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .detail-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .detail-body { padding: 16px 20px; }
+    .detail-field { margin-bottom: 14px; }
+    .detail-field:last-child { margin-bottom: 0; }
+    .detail-key { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin-bottom: 4px; }
+    .detail-val { font-family: var(--mono); font-size: 12px; color: var(--text); word-break: break-all; }
+    .port-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .port-chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--accent2);
+    }
+    .detail-actions { display: flex; flex-direction: column; gap: 8px; padding: 0 20px 16px; }
+
+    /* Chart panel */
+    .chart-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+    }
+    .chart-title { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 14px; text-transform: uppercase; letter-spacing: .5px; }
+    .donut-wrap { position: relative; display: flex; align-items: center; gap: 16px; }
+    canvas#donut { width: 90px !important; height: 90px !important; }
+    .donut-legend { flex: 1; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 6px; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* History chart */
+    .history-wrap { height: 60px; position: relative; }
+    canvas#history-chart { width: 100% !important; height: 60px !important; }
+
+    /* ─── Responsive ──────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .main-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 500px) {
+      .stats-row { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* Pulse animation for running scan */
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+    .pulsing { animation: pulse 1.5s infinite; }
+
+    /* Tooltip */
+    [data-tip] { position: relative; cursor: default; }
+    [data-tip]::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1E2D45;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 11px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .15s;
+      z-index: 100;
+    }
+    [data-tip]:hover::after { opacity: 1; }
+
+    /* ─── Target input ──────────────────────────────────────────── */
+    .target-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0 12px;
+      height: 38px;
+      transition: border-color .15s;
+    }
+    .target-input-wrap:focus-within { border-color: var(--accent); }
+    .target-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+    .target-input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      width: 200px;
+      min-width: 0;
+    }
+    .target-input::placeholder { color: var(--muted); }
+    .target-input:disabled { opacity: .5; }
+    .target-hint {
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    @media (max-width: 700px) {
+      .target-input { width: 130px; }
+      .target-hint { display: none; }
+    }
+
+    /* detect btn & network info */
+    .target-group { display: flex; flex-direction: column; gap: 4px; }
+    .detect-btn {
+      background: transparent; border: none;
+      color: var(--muted); font-size: 15px; cursor: pointer;
+      padding: 0 3px; line-height: 1;
+      transition: color .15s, transform .3s;
+    }
+    .detect-btn:hover { color: var(--accent); }
+    .detect-btn.spinning { animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .network-info {
+      font-size: 10px; font-family: var(--mono);
+      color: var(--accent); padding-left: 4px;
+      min-height: 14px; letter-spacing: .2px;
+    }
+    .network-info.err { color: var(--warn); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">🛰</div>
+    <div class="logo-text">
+      <h1>NetScanner</h1>
+      <p>Home Network Device Map</p>
+    </div>
+    <div class="header-actions">
+      <span id="last-scan-label" style="font-size:11px;color:var(--muted);"></span>
+      <div class="target-group">
+        <div class="target-input-wrap">
+          <span class="target-label">Target</span>
+          <input
+            class="target-input"
+            id="target-input"
+            type="text"
+            placeholder="Mendeteksi jaringan..."
+            spellcheck="false"
+            autocomplete="off"
+          />
+          <button class="detect-btn" id="detect-btn" onclick="detectNetwork()" title="Auto-detect jaringan aktif">⟳</button>
+        </div>
+        <div class="network-info" id="network-info"></div>
+        <span class="target-hint" id="target-hint"></span>
+      </div>
+      <button class="btn btn-primary" id="scan-btn" onclick="startScan()">
+        Scan
+      </button>
+    </div>
+  </header>
+
+  <!-- Stats row -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Devices Found</div>
+      <div class="stat-value accent" id="stat-total">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Unknown Devices</div>
+      <div class="stat-value warn" id="stat-flagged">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Open Ports</div>
+      <div class="stat-value blue" id="stat-ports">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Scan Status</div>
+      <div class="stat-value" id="stat-status" style="font-size:16px;margin-top:4px;color:var(--muted)">Idle</div>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div id="scan-progress-wrap">
+    <div class="progress-header">
+      <span class="progress-title pulsing">Scanning…</span>
+      <span class="progress-pct" id="progress-pct">0%</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
+    </div>
+    <div class="scan-log" id="scan-log"></div>
+  </div>
+
+  <!-- Main grid -->
+  <div class="main-grid">
+
+    <!-- Device list -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Connected Devices</span>
+          <span class="badge badge-accent" id="badge-total">0</span>
+          <span class="badge badge-warn" id="badge-flagged" style="margin-left:4px;display:none">0 unknown</span>
+          <div style="margin-left:auto;display:flex;gap:6px;">
+            <button class="btn btn-ghost" style="padding:5px 10px;font-size:11px;" onclick="exportCSV()" data-tip="Export as CSV">⬇ Export</button>
+          </div>
+        </div>
+        <div class="filter-tabs">
+          <button class="tab active" data-filter="all"     onclick="setFilter('all',this)">All</button>
+          <button class="tab"        data-filter="flagged" onclick="setFilter('flagged',this)">⚠ Unknown</button>
+          <button class="tab"        data-filter="router"  onclick="setFilter('router',this)">🌐 Routers</button>
+          <button class="tab"        data-filter="computer"onclick="setFilter('computer',this)">💻 Computers</button>
+          <button class="tab"        data-filter="smartphone"onclick="setFilter('smartphone',this)">📱 Phones</button>
+          <button class="tab"        data-filter="iot"     onclick="setFilter('iot',this)">🔌 IoT</button>
+          <button class="tab"        data-filter="server"  onclick="setFilter('server',this)">🖥 Servers</button>
+        </div>
+        <div class="search-bar">
+          <input class="search-input" type="text" id="search" placeholder="Search by IP, MAC, hostname, vendor…" oninput="renderDevices()">
+        </div>
+        <ul class="device-list" id="device-list">
+          <li class="empty-state">
+            <div class="em-icon">🛰</div>
+            <p>No scan data yet. Click <strong>Scan Network</strong> to begin.</p>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+
+      <!-- Device detail -->
+      <div id="device-detail" class="panel">
+        <div class="panel-header" style="padding:14px 20px;">
+          <span style="font-size:12px;color:var(--muted);">Select a device to inspect</span>
+        </div>
+        <div class="detail-body" id="detail-body" style="color:var(--muted);font-size:13px;padding:20px;">
+          Click any device in the list to see its details.
+        </div>
+      </div>
+
+      <!-- Type distribution chart -->
+      <div class="chart-panel">
+        <div class="chart-title">Device Types</div>
+        <div class="donut-wrap">
+          <canvas id="donut"></canvas>
+          <div class="donut-legend" id="donut-legend">
+            <span style="color:var(--muted);font-size:12px;">Run a scan first</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- History chart -->
+      <div class="chart-panel">
+        <div class="chart-title">Scan History — Device Count</div>
+        <div class="history-wrap">
+          <canvas id="history-chart"></canvas>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;" id="history-label">No history yet</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────
+let devices = [];
+let selected = null;
+let filterType = 'all';
+let pollTimer = null;
+
+// ─── Device type config ───────────────────────────────────────────────────
+const TYPE_ICON = {
+  router: '🌐', computer: '💻', smartphone: '📱', tablet: '📟',
+  iot: '🔌', server: '🖥', camera: '📷', 'single-board': '🔴', unknown: '❓'
+};
+const TYPE_COLORS = {
+  router:'#0077FF', computer:'#00E5A0', smartphone:'#AA66FF',
+  tablet:'#AA66FF', iot:'#FFA500', server:'#00C8A0',
+  camera:'#FF5C5C', 'single-board':'#FF7055', unknown:'#5A7090'
+};
+
+// ─── Auto-detect network ──────────────────────────────────────────────────
+async function detectNetwork() {
+  const btn  = document.getElementById('detect-btn');
+  const info = document.getElementById('network-info');
+  const inp  = document.getElementById('target-input');
+  btn.classList.add('spinning');
+  info.className = 'network-info';
+  info.textContent = 'Mendeteksi jaringan...';
+  try {
+    const r = await fetch('/api/detect-network');
+    const d = await r.json();
+    btn.classList.remove('spinning');
+    if (d.ok) {
+      inp.value = d.cidr;
+      inp.placeholder = d.cidr;
+      let meta = '✓ ' + d.cidr;
+      if (d.gateway)   meta += '  ·  GW ' + d.gateway;
+      if (d.interface) meta += '  ·  iface: ' + d.interface;
+      info.textContent = meta;
+      info.className = 'network-info';
+    } else {
+      info.textContent = '⚠ ' + (d.error || 'Tidak bisa deteksi — isi manual');
+      info.className = 'network-info err';
+    }
+  } catch(e) {
+    document.getElementById('detect-btn').classList.remove('spinning');
+    info.textContent = '⚠ Server tidak merespons';
+    info.className = 'network-info err';
+  }
+}
+
+// ─── Scan control ─────────────────────────────────────────────────────────
+async function startScan() {
+  const raw = document.getElementById('target-input').value.trim();
+  const hint = document.getElementById('target-hint');
+
+  // Basic validation
+  if (raw) {
+    const ipCidr = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/;
+    if (!ipCidr.test(raw)) {
+      hint.textContent = 'Format: 192.168.1.0/24 atau 192.168.1.0';
+      hint.style.color = 'var(--warn)';
+      document.getElementById('target-input').focus();
+      return;
+    }
+    hint.textContent = '';
+  }
+
+  try {
+    const body = raw ? JSON.stringify({ target: raw }) : JSON.stringify({});
+    const r = await fetch('/api/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+    if (!r.ok) { const e = await r.json(); alert(e.error || 'Could not start scan'); return; }
+    document.getElementById('scan-btn').disabled = true;
+    document.getElementById('target-input').disabled = true;
+    document.getElementById('scan-progress-wrap').classList.add('active');
+    pollTimer = setInterval(pollStatus, 600);
+  } catch(e) { alert('Server error: ' + e); }
+}
+
+async function pollStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const s = await r.json();
+
+    // progress bar
+    document.getElementById('progress-bar').style.width = s.progress + '%';
+    document.getElementById('progress-pct').textContent = s.progress + '%';
+
+    // log
+    const logEl = document.getElementById('scan-log');
+    logEl.innerHTML = s.log.map(l => `<span class="log-line">${escHtml(l)}</span>`).join('');
+    logEl.scrollTop = logEl.scrollHeight;
+
+    document.getElementById('stat-status').textContent = s.running ? '⟳ Running' : '✓ Done';
+    document.getElementById('stat-status').style.color = s.running ? 'var(--accent)' : 'var(--accent)';
+
+    if (!s.running) {
+      clearInterval(pollTimer);
+      document.getElementById('scan-btn').disabled = false;
+      document.getElementById('target-input').disabled = false;
+      document.getElementById('scan-progress-wrap').classList.remove('active');
+      if (s.last_scan) {
+        const d = new Date(s.last_scan);
+        document.getElementById('last-scan-label').textContent = 'Last scan ' + d.toLocaleTimeString();
+      }
+      await loadDevices();
+      await loadHistory();
+    }
+  } catch(e) { /* ignore */ }
+}
+
+// ─── Load & render devices ────────────────────────────────────────────────
+async function loadDevices() {
+  const r = await fetch('/api/devices');
+  devices = await r.json();
+  updateStats();
+  renderDevices();
+  renderDonut();
+}
+
+async function loadHistory() {
+  const r = await fetch('/api/history');
+  const h = await r.json();
+  renderHistory(h);
+}
+
+function updateStats() {
+  const flagged = devices.filter(d => d.flagged).length;
+  const totalPorts = devices.reduce((a,d) => a + d.ports.length, 0);
+  document.getElementById('stat-total').textContent   = devices.length;
+  document.getElementById('stat-flagged').textContent = flagged;
+  document.getElementById('stat-ports').textContent   = totalPorts;
+  document.getElementById('badge-total').textContent  = devices.length;
+
+  const fb = document.getElementById('badge-flagged');
+  if (flagged > 0) {
+    fb.style.display = '';
+    fb.textContent = flagged + ' unknown';
+  } else {
+    fb.style.display = 'none';
+  }
+}
+
+function setFilter(f, el) {
+  filterType = f;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderDevices();
+}
+
+function renderDevices() {
+  const q = document.getElementById('search').value.toLowerCase();
+  let list = devices;
+  if (filterType === 'flagged')  list = list.filter(d => d.flagged);
+  else if (filterType !== 'all') list = list.filter(d => d.type === filterType);
+  if (q) list = list.filter(d =>
+    d.ip.includes(q) || d.mac.toLowerCase().includes(q) ||
+    d.hostname.toLowerCase().includes(q) || d.vendor.toLowerCase().includes(q)
+  );
+
+  const ul = document.getElementById('device-list');
+  if (!list.length) {
+    ul.innerHTML = `<li class="empty-state"><div class="em-icon">🔍</div><p>No devices match your filter.</p></li>`;
+    return;
+  }
+  ul.innerHTML = list.map(d => deviceRow(d)).join('');
+}
+
+function deviceRow(d) {
+  const icon = TYPE_ICON[d.type] || '❓';
+  const flag = d.flagged ? '<span class="flag-icon" data-tip="Unknown device — not marked safe">⚠️</span>' : '';
+  const gwBadge = d.is_gateway ? '<span class="badge badge-accent" style="font-size:10px">GW</span>' : '';
+  const portCount = d.ports.length ? `<span class="badge badge-muted">${d.ports.length} port${d.ports.length>1?'s':''}</span>` : '';
+  const selClass = selected && selected.mac === d.mac ? ' selected' : '';
+  const flagClass = d.flagged ? ' flagged' : '';
+  return `
+    <li class="device-row${flagClass}${selClass}" onclick="selectDevice('${d.mac}')">
+      <div class="dev-icon ${d.type}">${icon}</div>
+      <div class="dev-info">
+        <div class="dev-name">${escHtml(d.hostname)}</div>
+        <div class="dev-sub">${d.ip} · ${d.mac}</div>
+      </div>
+      <div class="dev-right">
+        ${flag}${gwBadge}${portCount}
+        <span style="font-size:11px;color:var(--muted)">${escHtml(d.vendor)}</span>
+      </div>
+    </li>`;
+}
+
+function selectDevice(mac) {
+  selected = devices.find(d => d.mac === mac) || null;
+  renderDevices();
+  renderDetail();
+}
+
+function renderDetail() {
+  const d = selected;
+  if (!d) return;
+  const icon = TYPE_ICON[d.type] || '❓';
+  const flagHtml = d.flagged
+    ? `<div style="background:var(--warn-dim);border:1px solid rgba(255,92,92,.3);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--warn);">
+         ⚠️ <strong>Unknown device</strong> — This MAC address is not in your trusted list. Verify it belongs to you.
+       </div>`
+    : `<div style="background:rgba(0,229,160,.07);border:1px solid rgba(0,229,160,.2);border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:var(--accent);">
+         ✓ Trusted device
+       </div>`;
+
+  const portHtml = d.ports.length
+    ? `<div class="port-chips">${d.ports.map(p=>`<span class="port-chip">${p.port}/${p.service}</span>`).join('')}</div>`
+    : `<span style="color:var(--muted)">None detected</span>`;
+
+  document.getElementById('device-detail').querySelector('.panel-header').innerHTML = `
+    <span style="font-size:22px">${icon}</span>
+    <span style="font-weight:600;font-size:14px">${escHtml(d.hostname)}</span>
+    ${d.is_gateway ? '<span class="badge badge-accent" style="margin-left:auto">Gateway</span>' : ''}
+  `;
+
+  document.getElementById('detail-body').innerHTML = `
+    ${flagHtml}
+    <div class="detail-field">
+      <div class="detail-key">IP Address</div>
+      <div class="detail-val">${d.ip}</div>
+    </div>
+    <div class="detail-field">
+      <div class="detail-key">MAC Address</div>
+      <div class="detail-val">${d.mac}</div>
+    </div>
+    <div class="detail-field">
+      <div class="detail-key">Manufacturer</div>
+      <div class="detail-val">${escHtml(d.vendor)}</div>
+    </div>
+    <div class="detail-field">
+      <div class="detail-key">Device Type</div>
+      <div class="detail-val">${d.type}</div>
+    </div>
+    <div class="detail-field">
+      <div class="detail-key">Open Ports</div>
+      ${portHtml}
+    </div>
+    <div class="detail-field">
+      <div class="detail-key">Last Seen</div>
+      <div class="detail-val">${new Date(d.last_seen).toLocaleString()}</div>
+    </div>
+  `;
+
+  const actions = document.getElementById('device-detail').querySelector('.detail-actions') || (() => {
+    const el = document.createElement('div');
+    el.className = 'detail-actions';
+    document.getElementById('device-detail').appendChild(el);
+    return el;
+  })();
+
+  if (d.flagged) {
+    actions.innerHTML = `<button class="btn btn-primary" onclick="markKnown('${d.mac}')">✓ Mark as Trusted</button>`;
+  } else {
+    actions.innerHTML = `<button class="btn btn-ghost" onclick="markUnknown('${d.mac}')">✕ Remove Trust</button>`;
+  }
+}
+
+async function markKnown(mac) {
+  await fetch('/api/mark_known', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mac}) });
+  await loadDevices();
+  selected = devices.find(d => d.mac === mac) || null;
+  renderDetail();
+}
+async function markUnknown(mac) {
+  await fetch('/api/mark_unknown', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mac}) });
+  await loadDevices();
+  selected = devices.find(d => d.mac === mac) || null;
+  renderDetail();
+}
+
+// ─── Donut chart (pure canvas) ────────────────────────────────────────────
+function renderDonut() {
+  const canvas = document.getElementById('donut');
+  const ctx = canvas.getContext('2d');
+  canvas.width = 90; canvas.height = 90;
+
+  const counts = {};
+  devices.forEach(d => { counts[d.type] = (counts[d.type]||0) + 1; });
+  const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const total = devices.length || 1;
+
+  ctx.clearRect(0, 0, 90, 90);
+  let startAngle = -Math.PI / 2;
+  entries.forEach(([type, count]) => {
+    const slice = (count / total) * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(45, 45);
+    ctx.arc(45, 45, 40, startAngle, startAngle + slice);
+    ctx.closePath();
+    ctx.fillStyle = TYPE_COLORS[type] || '#5A7090';
+    ctx.fill();
+    startAngle += slice;
+  });
+  // Donut hole
+  ctx.beginPath();
+  ctx.arc(45, 45, 24, 0, 2 * Math.PI);
+  ctx.fillStyle = '#111827';
+  ctx.fill();
+  // Center text
+  ctx.fillStyle = '#E2EAF4';
+  ctx.font = 'bold 14px Inter, system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(devices.length, 45, 45);
+
+  const legend = document.getElementById('donut-legend');
+  legend.innerHTML = entries.map(([type, count]) => `
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${TYPE_COLORS[type]||'#5A7090'}"></div>
+      <span style="text-transform:capitalize">${type}</span>
+      <span style="margin-left:auto;color:var(--muted);font-family:var(--mono)">${count}</span>
+    </div>
+  `).join('');
+}
+
+// ─── History sparkline ────────────────────────────────────────────────────
+function renderHistory(history) {
+  const canvas = document.getElementById('history-chart');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth || 280;
+  canvas.height = 60;
+  ctx.clearRect(0, 0, canvas.width, 60);
+
+  if (!history.length) return;
+  const values = history.map(h => h.count);
+  const max = Math.max(...values, 1);
+  const min = 0;
+  const w = canvas.width;
+  const h = 60;
+  const pad = 4;
+
+  const pts = values.map((v, i) => ({
+    x: pad + (i / Math.max(values.length - 1, 1)) * (w - pad * 2),
+    y: h - pad - ((v - min) / (max - min)) * (h - pad * 2)
+  }));
+
+  // Fill
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, 'rgba(0,229,160,.3)');
+  grad.addColorStop(1, 'rgba(0,229,160,0)');
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, h);
+  pts.forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.lineTo(pts[pts.length-1].x, h);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+  ctx.strokeStyle = '#00E5A0';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Dots
+  pts.forEach(p => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3, 0, 2 * Math.PI);
+    ctx.fillStyle = '#00E5A0';
+    ctx.fill();
+  });
+
+  const last = history[history.length - 1];
+  document.getElementById('history-label').textContent =
+    `${history.length} scan${history.length>1?'s':''}  ·  latest: ${last.count} device${last.count!==1?'s':''}`;
+}
+
+// ─── Export CSV ───────────────────────────────────────────────────────────
+function exportCSV() {
+  if (!devices.length) { alert('No data to export. Run a scan first.'); return; }
+  const rows = [['IP','MAC','Hostname','Vendor','Type','Open Ports','Trusted','Gateway']];
+  devices.forEach(d => rows.push([
+    d.ip, d.mac, d.hostname, d.vendor, d.type,
+    d.ports.map(p=>p.port+'/'+p.service).join(';'),
+    d.is_known ? 'Yes':'No',
+    d.is_gateway ? 'Yes':'No',
+  ]));
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `netscanner_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Init
+loadDevices().catch(()=>{});
+loadHistory().catch(()=>{});
+detectNetwork();
+</script>
+</body>
+</html>

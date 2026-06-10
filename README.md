@@ -1,156 +1,70 @@
-# 🛰 Network Scanner
+# NetScanner — Home Network Device Scanner
 
-A lightweight network scanner that maps every device on your local network, identifies them by manufacturer using MAC OUI lookup, flags unknown devices, and presents everything in a real-time web dashboard.
+Maps your home network, identifies devices by manufacturer (MAC OUI lookup),
+flags unknown devices, and displays everything in a real-time dashboard.
 
-> Built with Python + Scapy + Flask. No cloud. No dependencies on external APIs. Runs entirely on your machine.
+## Quick Start
 
-![Python](https://img.shields.io/badge/Python-3.8+-blue?style=flat-square&logo=python)
-![Flask](https://img.shields.io/badge/Flask-2.3+-black?style=flat-square&logo=flask)
-![Scapy](https://img.shields.io/badge/Scapy-2.5+-green?style=flat-square)
-![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey?style=flat-square)
-
----
-
-## ✨ Features
-
-- **ARP Scanning** — Crafts raw ARP packets via Scapy for fast, reliable host discovery
-- **MAC OUI Lookup** — Identifies device manufacturer from the first 3 bytes of the MAC address using a bundled vendor table (no internet required)
-- **Auto Network Detection** — Automatically detects your active WiFi/LAN subnet on startup (Click n Go)
-- **Port Scanning** — Quick TCP connect scan on 9 common ports (SSH, HTTP, HTTPS, RTSP, MQTT, etc.)
-- **Device Classification** — Heuristically classifies devices: router, computer, smartphone, IoT, server, IP camera, single-board computer
-- **Unknown Device Flagging** — Any device not in your trusted list is highlighted and flagged
-- **Trust Management** — Mark devices as trusted or untrusted; persists across sessions
-- **Scan History** — Sparkline chart tracking device count across scans
-- **CSV Export** — Download the full device table
-- **Windows + Linux + macOS** — Works cross-platform
-
----
-
-## 📸 Dashboard Preview
-<img width="1919" height="1060" alt="Screenshot 2026-06-10 130736" src="https://github.com/user-attachments/assets/59dae7c5-3fc4-45ad-bb13-07f1adfb76e5" />
-
----
-
-## 🚀 Quick Start
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/yourusername/netscanner.git
-cd netscanner
-```
-
-### 2. Install dependencies
-
+### 1. Install dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Run
-
+### 2. Run (root required for ARP scanning)
 ```bash
-# Linux / macOS — root required for raw ARP sockets
 sudo python app.py
-
-# Windows — run Command Prompt as Administrator
-python app.py
 ```
 
-### 4. Open in browser
+Then open **http://localhost:5000** in your browser.
 
-```
-http://localhost:5000
-```
-
-The dashboard will automatically detect your active network subnet. Click **Scan** to begin.
+> **Why sudo?** ARP packet crafting with Scapy requires raw socket access,
+> which needs root/admin privileges. Without root it falls back to a ping
+> sweep + ARP cache read (less accurate but still works).
 
 ---
 
-## 📁 Project Structure
+## Features
+
+| Feature | Detail |
+|---|---|
+| **ARP Scan** | Crafts raw ARP packets via Scapy for reliable host discovery |
+| **MAC OUI Lookup** | Bundled 150+ vendor table — no internet needed |
+| **Port Scan** | Quick TCP connect scan on 9 common ports (SSH, HTTP, MQTT, RTSP…) |
+| **Device Typing** | Classifies: router, computer, smartphone, IoT, server, camera, etc. |
+| **Unknown Flagging** | Any device not in your trusted list is highlighted in red |
+| **Trust Management** | Mark/unmark devices as trusted — persists to `known_devices.json` |
+| **History Chart** | Sparkline of device counts across scans |
+| **CSV Export** | Download full device table |
+| **Reverse DNS** | Hostname lookup for each IP |
+
+## Architecture
 
 ```
-netscanner/
-├── app.py                  # Flask app + scan engine
-├── requirements.txt        # Python dependencies
-├── known_devices.json      # Persisted trusted MAC addresses (auto-created)
-└── templates/
-    └── index.html          # Dashboard UI (single file, no npm needed)
+app.py              Flask app + scan engine
+  ├── arp_scan()    Scapy ARP sweep (falls back to ping)
+  ├── lookup_vendor() OUI table lookup
+  ├── get_open_ports() TCP port scan
+  └── guess_device_type() Heuristic classifier
+
+templates/
+  └── index.html    Full dashboard (pure HTML/CSS/JS, no npm)
+
+known_devices.json  Persisted trusted MAC addresses
 ```
 
----
+## Scan Flow
 
-## ⚙️ How It Works
-
-### Scan Pipeline
-
-```
-1. Auto-detect active subnet (ipconfig / ip addr / socket)
-        ↓
-2. ARP sweep entire subnet with Scapy
-   (falls back to ping sweep if no root/admin)
-        ↓
+1. Detect default gateway + network CIDR from `/proc/net/route`
+2. ARP sweep the entire subnet (e.g. 192.168.1.0/24)
 3. For each responding host:
-   ├── Reverse DNS hostname lookup
-   ├── MAC OUI → manufacturer name
-   ├── TCP port scan (9 common ports)
-   ├── Device type classification
-   └── Flag if not in trusted list
-        ↓
-4. Results rendered live in browser dashboard
-```
+   - Reverse DNS hostname lookup
+   - MAC OUI → vendor name
+   - TCP port scan (22, 80, 443, 554, 1883, …)
+   - Device type heuristic
+   - Flag if not in trusted list
+4. Results rendered in real-time dashboard
 
-### MAC OUI Lookup
+## Network Requirements
 
-Every network device has a MAC address like `EC:08:6B:AA:BB:CC`.  
-The first 3 bytes (`EC:08:6B`) are the **OUI (Organizationally Unique Identifier)** — registered to a specific manufacturer (in this case, TP-Link).
-
-NetScanner includes a bundled table of 150+ common vendors so no internet connection is needed for lookups. Devices not in the table show as `Unknown Vendor`.
-
-### Fallback Mode (No Root / No Admin)
-
-If run without elevated privileges, Scapy cannot craft raw packets. NetScanner automatically falls back to:
-
-1. ICMP ping sweep using the system `ping` command
-2. Reading the OS ARP cache (`arp -a` on Windows, `arp -n` on Linux) to recover MAC addresses
-
-Results are less reliable than full ARP mode but still useful for basic discovery.
-
----
-
-## 🔒 Trust Management
-
-On first scan, **all discovered devices are marked as unknown** (flagged in red).
-
-- Click any device → **Mark as Trusted** to add it to your whitelist
-- Trusted MACs are saved to `known_devices.json`
-- Any new device appearing on future scans that is not whitelisted gets flagged automatically
-
-This is especially useful for **fixed networks** (office, home lab, school network) where you know exactly which devices should be present.
-
----
-
-## 🌐 Platform Support
-
-| Platform | ARP Scan | Ping Fallback | Auto-detect Subnet |
-|----------|----------|---------------|--------------------|
-| Windows  | ✅ (as Administrator) | ✅ | ✅ via `ipconfig` |
-| Linux    | ✅ (as root) | ✅ | ✅ via `ip addr` |
-| macOS    | ✅ (as root) | ✅ | ✅ via `netstat` |
-
----
-
-## 📦 Dependencies
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `flask` | ≥ 2.3 | Web server & dashboard |
-| `scapy` | ≥ 2.5 | Raw packet crafting for ARP scan |
-
-No frontend build tools required. The dashboard is a single self-contained HTML file with zero npm dependencies.
-
-## ⚠️ Legal Disclaimer
-
-This tool is intended for use **on networks you own or have explicit permission to scan**.  
-Unauthorized network scanning may violate local laws. Use responsibly.
-
----
+The scanner must run **on the same network** as the devices you want to
+discover. It cannot see devices on other subnets or VLANs.
