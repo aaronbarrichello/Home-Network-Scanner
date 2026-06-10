@@ -29,18 +29,7 @@ A lightweight network scanner that maps every device on your local network, iden
 ## 📸 Dashboard Preview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  🛰 NetScanner          [Target: 192.168.1.0/24 ⟳]  [Scan] │
-├──────────┬──────────┬──────────┬──────────────────────────  │
-│ Devices  │ Unknown  │ Open     │ Status                      │
-│    12    │    2     │   8      │ ✓ Done                      │
-├─────────────────────────────────────────────────────────────┤
-│ 🌐 router.local     192.168.1.1    TP-Link      GW          │
-│ 💻 DESKTOP-ABC      192.168.1.5    Intel                     │
-│ 📱 iPhone-Aaron     192.168.1.8    Apple                     │
-│ ⚠️  Unknown Device   192.168.1.11   Samsung   ← FLAGGED      │
-│ 🔌 esp32-sensor     192.168.1.14   Espressif    IoT          │
-└─────────────────────────────────────────────────────────────┘
+<img width="1919" height="1066" alt="image" src="https://github.com/user-attachments/assets/66ca8ae7-cb47-4ac1-8129-4c9cf10de54c" />
 ```
 
 ---
