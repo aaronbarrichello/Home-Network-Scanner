@@ -1,7 +1,4 @@
 # 🛰 NetScanner — Home Network Device Scanner
-
-A lightweight network scanner that maps every device on your local network, identifies them by manufacturer using MAC OUI lookup, flags unknown devices, and presents everything in a real-time web dashboard.
-
 > Built with Python + Scapy + Flask. No cloud. No dependencies on external APIs. Runs entirely on your machine.
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue?style=flat-square&logo=python)
