@@ -1,4 +1,4 @@
-# 🛰 NetScanner — Home Network Device Scanner
+# 🛰 Network Scanner
 
 A lightweight network scanner that maps every device on your local network, identifies them by manufacturer using MAC OUI lookup, flags unknown devices, and presents everything in a real-time web dashboard.
 
@@ -15,7 +15,7 @@ A lightweight network scanner that maps every device on your local network, iden
 
 - **ARP Scanning** — Crafts raw ARP packets via Scapy for fast, reliable host discovery
 - **MAC OUI Lookup** — Identifies device manufacturer from the first 3 bytes of the MAC address using a bundled vendor table (no internet required)
-- **Auto Network Detection** — Automatically detects your active WiFi/LAN subnet on startup
+- **Auto Network Detection** — Automatically detects your active WiFi/LAN subnet on startup (Click n Go)
 - **Port Scanning** — Quick TCP connect scan on 9 common ports (SSH, HTTP, HTTPS, RTSP, MQTT, etc.)
 - **Device Classification** — Heuristically classifies devices: router, computer, smartphone, IoT, server, IP camera, single-board computer
 - **Unknown Device Flagging** — Any device not in your trusted list is highlighted and flagged
@@ -27,10 +27,7 @@ A lightweight network scanner that maps every device on your local network, iden
 ---
 
 ## 📸 Dashboard Preview
-
-```
-<img width="1919" height="1066" alt="image" src="https://github.com/user-attachments/assets/66ca8ae7-cb47-4ac1-8129-4c9cf10de54c" />
-```
+<img width="1919" height="1060" alt="Screenshot 2026-06-10 130736" src="https://github.com/user-attachments/assets/59dae7c5-3fc4-45ad-bb13-07f1adfb76e5" />
 
 ---
 
@@ -151,43 +148,9 @@ This is especially useful for **fixed networks** (office, home lab, school netwo
 
 No frontend build tools required. The dashboard is a single self-contained HTML file with zero npm dependencies.
 
----
-
-## 🆚 How Is This Different from nmap?
-
-| Feature | NetScanner | nmap |
-|---------|-----------|------|
-| Interface | Web dashboard (browser) | CLI |
-| Ease of use | Click and go | Requires knowing syntax |
-| Trust/whitelist | ✅ Persistent | ❌ |
-| Scan history chart | ✅ | ❌ |
-| OS fingerprinting | ❌ Basic only | ✅ Very accurate |
-| Script engine | ❌ | ✅ NSE (powerful) |
-| Scan speed & depth | Basic | Advanced |
-| Vulnerability detection | ❌ | ✅ via NSE scripts |
-
-NetScanner is best described as **nmap with a GUI and device trust tracking** — designed for visibility on networks where you already know what *should* be there.
-
----
-
-## 🗺 Roadmap
-
-- [ ] Scheduled auto-scan (every N minutes, runs in background)
-- [ ] Email / webhook alert when an unknown device is detected
-- [ ] Full IEEE OUI database integration (35,000+ vendors)
-- [ ] Per-device connection history timeline
-- [ ] Network topology map (visual graph of who's connected)
-- [ ] Docker support
-
----
-
 ## ⚠️ Legal Disclaimer
 
 This tool is intended for use **on networks you own or have explicit permission to scan**.  
 Unauthorized network scanning may violate local laws. Use responsibly.
 
 ---
-
-## 📄 License
-
-MIT License — free to use, modify, and distribute.
