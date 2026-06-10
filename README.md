@@ -15,7 +15,7 @@ A lightweight network scanner that maps every device on your local network, iden
 
 - **ARP Scanning** — Crafts raw ARP packets via Scapy for fast, reliable host discovery
 - **MAC OUI Lookup** — Identifies device manufacturer from the first 3 bytes of the MAC address using a bundled vendor table (no internet required)
-- **Auto Network Detection** — Automatically detects your active WiFi/LAN subnet on startup
+- **Auto Network Detection** — Automatically detects your active WiFi/LAN subnet on startup, so you can click & go
 - **Port Scanning** — Quick TCP connect scan on 9 common ports (SSH, HTTP, HTTPS, RTSP, MQTT, etc.)
 - **Device Classification** — Heuristically classifies devices: router, computer, smartphone, IoT, server, IP camera, single-board computer
 - **Unknown Device Flagging** — Any device not in your trusted list is highlighted and flagged
@@ -27,21 +27,8 @@ A lightweight network scanner that maps every device on your local network, iden
 ---
 
 ## 📸 Dashboard Preview
+<img width="1919" height="1060" alt="Screenshot 2026-06-10 130736" src="https://github.com/user-attachments/assets/cb8ca331-22a5-4dbb-8ef1-54d0d4dd8d1e" />
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  🛰 NetScanner          [Target: 192.168.1.0/24 ⟳]  [Scan] │
-├──────────┬──────────┬──────────┬──────────────────────────  │
-│ Devices  │ Unknown  │ Open     │ Status                      │
-│    12    │    2     │   8      │ ✓ Done                      │
-├─────────────────────────────────────────────────────────────┤
-│ 🌐 router.local     192.168.1.1    TP-Link      GW          │
-│ 💻 DESKTOP-ABC      192.168.1.5    Intel                     │
-│ 📱 iPhone-Aaron     192.168.1.8    Apple                     │
-│ ⚠️  Unknown Device   192.168.1.11   Samsung   ← FLAGGED      │
-│ 🔌 esp32-sensor     192.168.1.14   Espressif    IoT          │
-└─────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -79,17 +66,6 @@ http://localhost:5000
 The dashboard will automatically detect your active network subnet. Click **Scan** to begin.
 
 ---
-
-## 📁 Project Structure
-
-```
-netscanner/
-├── app.py                  # Flask app + scan engine
-├── requirements.txt        # Python dependencies
-├── known_devices.json      # Persisted trusted MAC addresses (auto-created)
-└── templates/
-    └── index.html          # Dashboard UI (single file, no npm needed)
-```
 
 ---
 
@@ -139,56 +115,11 @@ On first scan, **all discovered devices are marked as unknown** (flagged in red)
 - Trusted MACs are saved to `known_devices.json`
 - Any new device appearing on future scans that is not whitelisted gets flagged automatically
 
-This is especially useful for **fixed networks** (office, home lab, school network) where you know exactly which devices should be present.
+This is especially useful for **fixed networks** (office, home lab, school network) where you know exactly which devices should be present. **You can also add your known/trusted mac addr manually on `app.py`**
 
 ---
 
-## 🌐 Platform Support
-
-| Platform | ARP Scan | Ping Fallback | Auto-detect Subnet |
-|----------|----------|---------------|--------------------|
-| Windows  | ✅ (as Administrator) | ✅ | ✅ via `ipconfig` |
-| Linux    | ✅ (as root) | ✅ | ✅ via `ip addr` |
-| macOS    | ✅ (as root) | ✅ | ✅ via `netstat` |
-
 ---
-
-## 📦 Dependencies
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `flask` | ≥ 2.3 | Web server & dashboard |
-| `scapy` | ≥ 2.5 | Raw packet crafting for ARP scan |
-
-No frontend build tools required. The dashboard is a single self-contained HTML file with zero npm dependencies.
-
----
-
-## 🆚 How Is This Different from nmap?
-
-| Feature | NetScanner | nmap |
-|---------|-----------|------|
-| Interface | Web dashboard (browser) | CLI |
-| Ease of use | Click and go | Requires knowing syntax |
-| Trust/whitelist | ✅ Persistent | ❌ |
-| Scan history chart | ✅ | ❌ |
-| OS fingerprinting | ❌ Basic only | ✅ Very accurate |
-| Script engine | ❌ | ✅ NSE (powerful) |
-| Scan speed & depth | Basic | Advanced |
-| Vulnerability detection | ❌ | ✅ via NSE scripts |
-
-NetScanner is best described as **nmap with a GUI and device trust tracking** — designed for visibility on networks where you already know what *should* be there.
-
----
-
-## 🗺 Roadmap
-
-- [ ] Scheduled auto-scan (every N minutes, runs in background)
-- [ ] Email / webhook alert when an unknown device is detected
-- [ ] Full IEEE OUI database integration (35,000+ vendors)
-- [ ] Per-device connection history timeline
-- [ ] Network topology map (visual graph of who's connected)
-- [ ] Docker support
 
 ---
 
@@ -198,7 +129,3 @@ This tool is intended for use **on networks you own or have explicit permission 
 Unauthorized network scanning may violate local laws. Use responsibly.
 
 ---
-
-## 📄 License
-
-MIT License — free to use, modify, and distribute.
